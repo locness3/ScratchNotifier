@@ -24,26 +24,47 @@ function askNotificationPermission() {
   }
 }
 
-function askForUsername(error) {
-  swal({
+async function askForUsername(error) {
+  const callback = await swal({
     title: error === false ? "Please enter your Scratch username" : "Oh oh! That username doesn't seem to exist. Try again!",
     text: "You'll be able to change this later :)",
     input: "text",
     inputPlaceholder: "griffpatch",
-    type: error === false ? "" : "error"
-  })
-  .then(function(callback) {
-    var username = callback.value;
-    if(username[0] === "@") var username = username.substring(1,username.length);
-    var xmlhttp = new XMLHttpRequest();
-    xmlhttp.open("GET", "https://cors.io/?https://api.scratch.mit.edu/users/" + username, true);
-    xmlhttp.send();
-    xmlhttp.onreadystatechange = function() {
-      if (xmlhttp.readyState === 4) {
-        if(xmlhttp.status === 200) setUsername(JSON.parse(xmlhttp.responseText).username);
-        else askForUsername(true);
+    type: !error ? "" : "error"
+  });
+  const username = callback.value;
+  if(!username) return;
+  const validUsername = await getValidUsername(username);
+  if(validUsername) setUsername(validUsername);
+  else askForUsername(true);
+}
+
+function getValidUsername(username) {
+  if(username[0] === "@") /* Constant */ var username = username.substring(1,username.length);
+  return new Promise(async resolve => {
+    const res = await requestAPI(`users/${username}`);
+    if(!res.code) resolve(res.username);
+    else resolve(false);
+  });
+}
+
+corsIoWorks = true;
+async function requestAPI(endpoint) {
+  const corsIoWorksOnStart = corsIoWorks;
+  return new Promise(async resolve => {
+    try {
+      const req = corsIoWorks ? await fetch(`https://cors.io/?https://api.scratch.mit.edu/${endpoint}`) : await fetch(`https://api.scratchnotifier.cf/scratch/${endpoint}`);
+      const res = await req.json();
+      resolve(res);
+    } catch(err) {
+      if(corsIoWorksOnStart) {
+        corsIoWorks = false;
+        OneSignal.push(function() {
+          OneSignal.sendTag("corsIoWorks", "0");
+        });
+        resolve(await requestAPI(endpoint));
       }
-    };
+    }
   });
 }
 

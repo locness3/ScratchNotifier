@@ -6,6 +6,7 @@ var msgCount;
 var globalSessionTimeout;
 var openedTab;
 var altAccountsMsgCounts = {};
+var corsIoWorks = true;
 const bellClickActions = {
   "notifications_on": () => {
     globalSessionTimeout = setTimeout(() => {
@@ -41,6 +42,25 @@ const bellClickActions = {
     });
   }
 };
+const bgUploadOnChange = () => {
+  const getBase64Image = function getBase64Image(img) {var canvas=document.createElement("canvas");canvas.width=img.width;canvas.height=img.height;var ctx=canvas.getContext("2d");ctx.drawImage(img,0,0);var dataURL=canvas.toDataURL("image/png");return dataURL;}
+  const uploadedImage = document.createElement("img");
+  const imageReader = new FileReader();
+  imageReader.readAsDataURL(document.getElementById("bg-upload").files[0]);
+  imageReader.onload = e => {
+    localStorage.setItem("customBg",  e.target.result);
+    setBackground(true);
+  }
+}
+const privacy = `
+Scratch Notifier uses the following services. They may collect data according to their Terms of Service and Privacy Policies.
+<br>Hosting services: GitHub (Pages), Cloudflare (free plan).
+<br>Other services: Scratch API, Google Analytics, OneSignal (free plan), Google font CDN.
+<br><br>Scratch Notifier also currently uses proxy services to interact with the Scratch API because of the temporal removal of the Access-Control-Allow-Origin HTTP header.
+<br>By default, the CORS proxy used is cors.io, ran by Dean Pierce.
+<br>However, sometimes that proxy cannot be used by some users because it's blocked by parental controls or similar software.
+In those scenarios, api.scratchnotifier.cf (ran by Scratcher DatOneLefty) will be used instead.
+`;
 
 // Handle freezes and discards
 document.addEventListener("freeze", () => {
@@ -90,6 +110,7 @@ function checkForUndefinedKeys() {
   if(scratchNotifier.settings === undefined) scratchNotifier.settings = {};
   if(scratchNotifier.settings.closeNotification === undefined) scratchNotifier.settings.closeNotification = 0;
   if(scratchNotifier.settings.sound === undefined) scratchNotifier.settings.sound = "system";
+  if(scratchNotifier.settings.background === undefined) scratchNotifier.settings.background = "none";
   if(scratchNotifier.overviewDone === undefined) {
     scratchNotifier.overviewDone = true;
     window.addEventListener("load", overview);
@@ -105,6 +126,7 @@ function main() {
   if(!scratchNotifier.globalNotifications) document.getElementById("bell-icon").innerText = "notifications_off";
   setProfilePicAndUsername();
   parseAltAccounts();
+  setBackground();
   document.body.style.display = "block";
   // Handle message counts & settings
   checkMainMessages();
@@ -112,13 +134,43 @@ function main() {
   // Note: if you change this ↑ interval, please also take a look at the first line on checkMainMessages()
   checkAltMessages();
   setInterval(checkAltMessages, 60000);
-  settings();
+  settingsHTML = document.getElementById("notifier-settings").innerHTML;
+  document.getElementById("notifier-settings").remove();
   // OneSignal tags
   OneSignal.push(function() {
     OneSignal.sendTag("freezeCount", scratchNotifier.freezeCount);
     OneSignal.sendTag("discardCount", scratchNotifier.discardCount);
     OneSignal.sendTag("ram", navigator.deviceMemory); // RAM size - only works on Chrome
+    OneSignal.sendTag("corsIoWorks", "1");
   });
+}
+
+function setBackground(calledFromSettings) {
+  if(scratchNotifier.settings.background === "none") document.body.style.backgroundImage = "";
+  if(scratchNotifier.settings.background === "random") {
+    toast({
+      type: "info",
+      text: "Loading background...",
+      timer: null
+    });
+    const bgImg = new Image();
+    bgImg.src = 'https://picsum.photos/'+ screen.width +'/' + screen.height + '/?random';
+    bgImg.onload = () => {
+      document.body.style.backgroundImage = `url(${bgImg.src})`;
+      document.getElementById("scratch-notifier").style.backgroundColor = "rgba(241,241,241,0.3)";
+      swal.close();
+      if(calledFromSettings) settings();
+    }
+  }
+  if(scratchNotifier.settings.background === "custom") {
+    if(!localStorage.getItem("customBg")) {
+      document.body.style.backgroundImage = "";
+      return;
+    }
+    const bgImg = localStorage.getItem("customBg");
+    document.body.style.backgroundImage = `url(${bgImg})`;
+    document.getElementById("scratch-notifier").style.backgroundColor = "rgba(241,241,241,0.3)";
+  }
 }
 
 // Main account messages ↓
@@ -205,8 +257,15 @@ function setProfilePicAndUsername() {
 }
 
 function settings() {
+  // Add sweetalert
+  swal({
+    title: "Settings",
+    html: settingsHTML,
+    confirmButtonText: "Close"
+  });
+
   // Select correct option on sound effect dropdown
-  for (var i = 0; i < document.getElementById("sfx").options.length; i++) {
+  for (var i in document.getElementById("sfx").options) {
     if(document.getElementById("sfx").options[i].value === scratchNotifier.settings.sound) {
       document.getElementById("sfx").selectedIndex = i;
       break;
@@ -214,7 +273,7 @@ function settings() {
   }
   // Handle changes on sound effect dropdown
   document.getElementById("sfx").onchange = () => {
-    const newValue = document.getElementById("sfx").options[document.getElementById("sfx").selectedIndex].value;
+    const newValue = document.getElementById("sfx").value;
     scratchNotifier.settings.sound = newValue;
     updateLocalStorage();
     if(newValue !== "none" && newValue !== "system") {
@@ -223,17 +282,36 @@ function settings() {
   };
 
   // Select correct option on close notification timeout
-  for (var i = 0; i < document.getElementById("close-notifications").options.length; i++) {
+  for (var i in document.getElementById("close-notifications").options) {
     if(document.getElementById("close-notifications").options[i].value === String(scratchNotifier.settings.closeNotification)) {
       document.getElementById("close-notifications").selectedIndex = i;
       break;
     }
   }
-  // Handle changes on close notification timeout
-  document.getElementById("close-notifications").onchange = () => {
-    const newValue = document.getElementById("close-notifications").options[document.getElementById("close-notifications").selectedIndex].value;
+
+  // Handle changes on background setting
+  document.getElementById("background-setting").onchange = () => {
+    const newValue = document.getElementById("background-setting").value;
     scratchNotifier.settings.closeNotification = Number(newValue);
     updateLocalStorage();
+  };
+
+  // Select correct option on background setting
+  for (var i in document.getElementById("background-setting").options) {
+    if(document.getElementById("background-setting").options[i].value === scratchNotifier.settings.background) {
+      document.getElementById("background-setting").selectedIndex = i;
+      break;
+    }
+  }
+  if(scratchNotifier.settings.background === "custom") document.getElementById("bg-upload").style.display = "inline-block";
+  // Handle changes on close notification timeout
+  document.getElementById("background-setting").onchange = () => {
+    document.getElementById("bg-upload").style.display = "none";
+    const newValue = document.getElementById("background-setting").value;
+    scratchNotifier.settings.background = newValue;
+    updateLocalStorage();
+    setBackground(true);
+    if(newValue === "custom") document.getElementById("bg-upload").style.display = "inline-block";
   };
 }
 
@@ -370,9 +448,10 @@ async function addAltAlert() {
     const usernameValid = await getValidUsername(username);
     if(usernameValid) {
       // Add alt
-      scratchNotifier.altAccounts.push({"username": username, "notifications": false});
+      scratchNotifier.altAccounts.push({"username": usernameValid, "notifications": false});
       updateLocalStorage();
       parseAltAccounts();
+      checkAltMessages();
     }
     else
     toast({
@@ -393,7 +472,7 @@ async function checkSingleAltMessages(i) {
   if(altAccountsMsgCounts[altUsername]) {
     const previousAltMsgCount = altAccountsMsgCounts[altUsername];
     altAccountsMsgCounts[altUsername] = msgCountAlt;
-    if(scratchNotifier.altAccounts[i].notifications && msgCountAlt > previousAltMsgCount) notification(`${username}: ${altMsgCount} message${s(altMsgCount)}`, "Click to close this notification", profilePic);
+    if(scratchNotifier.altAccounts[i].notifications && msgCountAlt > previousAltMsgCount) notification(`${altUsername}: ${msgCountAlt} message${s(msgCountAlt)}`, "Click to close this notification", document.getElementsByClassName("alt-profile-pic")[i].src);
   } else altAccountsMsgCounts[altUsername] = msgCountAlt;
 }
 
@@ -401,8 +480,7 @@ async function checkSingleAltMessages(i) {
 
 function getMessageCount(username) {
   return new Promise(async resolve => {
-    const req = await fetch(`https://cors.io/?https://api.scratch.mit.edu/users/${username}/messages/count?${Math.floor(Date.now())}`);
-    const res = await req.json();
+    const res = await requestAPI(`users/${username}/messages/count`);
     resolve(res.count);
   });
 }
@@ -433,8 +511,7 @@ function notification(title, body, icon, onClickDo) {
 
 async function loadProfilePicture(username, imageElement) {
   imageElement.style.visibility = "hidden";
-  const req = await fetch(`https://cors.io/?https://api.scratch.mit.edu/users/${username}`);
-  const res = await req.json();
+  const res = await requestAPI(`users/${username}`);
   imageElement.src = `https://cdn2.scratch.mit.edu/get_image/user/${res.id}_256x256.png`;
   imageElement.style.visibility = "visible";
 }
@@ -442,9 +519,28 @@ async function loadProfilePicture(username, imageElement) {
 function getValidUsername(username) {
   if(username[0] === "@") /* Constant */ var username = username.substring(1,username.length);
   return new Promise(async resolve => {
-    const req = await fetch(`https://cors.io/?https://api.scratch.mit.edu/users/${username}`);
-    if(req.status === 200) resolve((await req.json()).username);
+    const res = await requestAPI(`users/${username}`);
+    if(!res.code) resolve(res.username);
     else resolve(false);
+  });
+}
+
+async function requestAPI(endpoint) {
+  const corsIoWorksOnStart = corsIoWorks;
+  return new Promise(async resolve => {
+    try {
+      const req = corsIoWorks ? await fetch(`https://cors.io/?https://api.scratch.mit.edu/${endpoint}`) : await fetch(`https://api.scratchnotifier.cf/scratch/${endpoint}`);
+      const res = await req.json();
+      resolve(res);
+    } catch(err) {
+      if(corsIoWorksOnStart) {
+        corsIoWorks = false;
+        OneSignal.push(function() {
+          OneSignal.sendTag("corsIoWorks", "0");
+        });
+        resolve(await requestAPI(endpoint));
+      }
+    }
   });
 }
 
