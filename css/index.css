@@ -45,7 +45,6 @@ body {
 #scratch-notifier {
 	float: left;
 	width: calc(100vw - 0vh); /*Padding in left and right*/
-	height: calc(92vh - 2vh); /*Padding in top and bottom*/
 	padding-top: 2vh;
 }
 
@@ -189,11 +188,11 @@ body {
 	cursor: pointer;
 }
 
-#footer-content {
+/* #footer-content {
 	position: relative;
 	top: 50%;
 	transform: translateY(-50%);
-}
+} */
 
 #footer-right {
 	float: right;
