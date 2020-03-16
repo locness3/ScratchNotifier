@@ -130,10 +130,10 @@ function main() {
   document.body.style.display = "block";
   // Handle message counts & settings
   checkMainMessages();
-  setInterval(checkMainMessages, 30000);
+  setInterval(checkMainMessages, 60000);
   // Note: if you change this ↑ interval, please also take a look at the first line on checkMainMessages()
   checkAltMessages();
-  setInterval(checkAltMessages, 60000);
+  setInterval(checkAltMessages, 180000);
   settingsHTML = document.getElementById("notifier-settings").innerHTML;
   document.getElementById("notifier-settings").remove();
   // OneSignal tags
@@ -378,7 +378,7 @@ function parseAltAccounts() {
   }
   // Parse and show correct settings
   for (var i = 0; i < scratchNotifier.altAccounts.length; i++) {
-    if(scratchNotifier.altAccounts[i].username !== document.getElementsByClassName("alt")[i].innerText) loadProfilePicture(scratchNotifier.altAccounts[i].username, document.getElementsByClassName("alt-profile-pic")[i])
+    if(document.getElementsByClassName("alt")[i] && (scratchNotifier.altAccounts[i].username !== document.getElementsByClassName("alt")[i].innerText)) loadProfilePicture(scratchNotifier.altAccounts[i].username, document.getElementsByClassName("alt-profile-pic")[i])
     document.getElementsByClassName("alt")[i].innerText = scratchNotifier.altAccounts[i].username;
     const altBell = document.getElementsByClassName("alt-row")[i].getElementsByClassName("alt-bell")[0];
     if(scratchNotifier.altAccounts[i].notifications) altBell.innerText = "notifications_on"
@@ -480,7 +480,8 @@ async function checkSingleAltMessages(i) {
 
 function getMessageCount(username) {
   return new Promise(async resolve => {
-    const res = await requestAPI(`users/${username}/messages/count`);
+    // const res = await requestAPI(`users/${username}/messages/count`);
+    const res = await requestAPI(`msgcount/${username}`);
     resolve(res.count);
   });
 }
@@ -529,7 +530,7 @@ async function requestAPI(endpoint) {
   const corsIoWorksOnStart = corsIoWorks;
   return new Promise(async resolve => {
     try {
-      const req = corsIoWorks ? await fetch(`https://cors.io/?https://api.scratch.mit.edu/${endpoint}`) : await fetch(`https://api.scratchnotifier.cf/scratch/${endpoint}`);
+      const req = /*corsIoWorks ? await fetch(`https://cors.io/?https://api.scratch.mit.edu/${endpoint}`) :*/ await fetch(`https://api.scratchstats.com/worker/${endpoint}`);
       const res = await req.json();
       resolve(res);
     } catch(err) {
@@ -538,7 +539,7 @@ async function requestAPI(endpoint) {
         OneSignal.push(function() {
           OneSignal.sendTag("corsIoWorks", "0");
         });
-        resolve(await requestAPI(endpoint));
+        //resolve(await requestAPI(endpoint));
       }
     }
   });
